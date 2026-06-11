@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">LumaLight</string>
+    <string name="activate">Activate</string>
+    <string name="active_hint">Tap anywhere to exit</string>
+    <!-- Modes -->
+    <string name="mode_solid">Solid</string>
+    <string name="mode_strobe">Strobe</string>
+    <string name="mode_sos">SOS</string>
+    <string name="mode_pulse">Pulse</string>
+    <!-- Labels -->
+    <string name="strobe_speed">Strobe Speed</string>
+    <string name="hue_picker">Hue Picker</string>
+    <string name="toggle_led_torch">Sync Camera LED</string>
+</resources>
