@@ -1,11 +1,18 @@
 package com.example;
 
-import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
+import android.graphics.Shader;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
+import android.graphics.drawable.ShapeDrawable;
+import android.graphics.drawable.shapes.RoundRectShape;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
@@ -19,8 +26,6 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -34,14 +39,16 @@ import com.google.android.material.switchmaterial.SwitchMaterial;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "LumaLight";
-    private static final String PREF_COLOR = "pref_color";
+    private static final String PREF_COLOR_1 = "pref_color_1";
+    private static final String PREF_COLOR_2 = "pref_color_2";
     private static final int PERMISSION_REQUEST_CAMERA = 1001;
 
     // UI
-    private View colorSwatch;
-    private LinearLayout presetContainer;
-    private SeekBar hueSlider;
-    private RadioGroup modeGroup;
+    private TextView tabSolid, tabStrobe;
+    private TextView lblColor1;
+    private View colorSwatch1, colorSwatch2;
+    private LinearLayout presetContainer1, presetContainer2;
+    private SeekBar hueSlider1, hueSlider2;
     private LinearLayout strobeContainer;
     private SeekBar strobeSlider;
     private SwitchMaterial ledToggle;
@@ -52,8 +59,9 @@ public class MainActivity extends AppCompatActivity {
     private TextView activeHintText;
 
     // State
-    private int currentColor = Color.WHITE;
-    private int currentModeId = R.id.modeSolid;
+    private int currentColor1 = Color.WHITE;
+    private int currentColor2 = Color.BLACK;
+    private boolean isStrobeMode = false;
     private boolean isActive = false;
     private int strobeFrequency = 10; // 1 to 20 Hz
     private boolean useCameraLed = false;
@@ -67,25 +75,7 @@ public class MainActivity extends AppCompatActivity {
 
     // Timing & Animation
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private ValueAnimator pulseAnimator;
-    private boolean lightState = false; // For strobe/sos toggle
-
-    // SOS Timing arrays (in milliseconds)
-    // 1 time unit = 150ms for brisk SOS
-    // Dot = 1 unit, Dash = 3 units, Pause between elements = 1 unit
-    // Pause between letters = 3 units, Pause between SOS loops = 7 units
-    // Total pattern elements: S (dot, pause, dot, pause, dot, letter_pause) ->
-    // O (dash, pause, dash, pause, dash, letter_pause) ->
-    // S (dot, pause, dot, pause, dot, word_pause)
-    private static final int SOS_UNIT = 200;
-    private final int[] sosPattern = {
-            SOS_UNIT, SOS_UNIT, SOS_UNIT, SOS_UNIT, SOS_UNIT, 3 * SOS_UNIT, // S
-            3 * SOS_UNIT, SOS_UNIT, 3 * SOS_UNIT, SOS_UNIT, 3 * SOS_UNIT, 3 * SOS_UNIT, // O
-            SOS_UNIT, SOS_UNIT, SOS_UNIT, SOS_UNIT, SOS_UNIT, 7 * SOS_UNIT // S
-    };
-    // True/False representing light on/off for each duration in the sosPattern array.
-    // The pattern represents durations of ON and OFF alternately starting with ON.
-    private int sosIndex = 0;
+    private boolean isColor1Turn = true;
 
     @SuppressLint("InvalidWakeLockTag")
     @Override
@@ -94,7 +84,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         SharedPreferences prefs = getPreferences(MODE_PRIVATE);
-        currentColor = prefs.getInt(PREF_COLOR, Color.WHITE);
+        currentColor1 = prefs.getInt(PREF_COLOR_1, Color.WHITE);
+        currentColor2 = prefs.getInt(PREF_COLOR_2, Color.BLACK);
 
         PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
         if (powerManager != null) {
@@ -104,8 +95,10 @@ public class MainActivity extends AppCompatActivity {
         initCamera();
         bindViews();
         setupListeners();
+        setupSliders();
         setupPresets();
-        updateColorState(currentColor);
+        updateColorState(1, currentColor1);
+        updateColorState(2, currentColor2);
     }
 
     private void initCamera() {
@@ -130,12 +123,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void bindViews() {
-        colorSwatch = findViewById(R.id.colorSwatch);
-        presetContainer = findViewById(R.id.presetContainer);
-        hueSlider = findViewById(R.id.hueSlider);
-        modeGroup = findViewById(R.id.modeGroup);
+        tabSolid = findViewById(R.id.tabSolid);
+        tabStrobe = findViewById(R.id.tabStrobe);
+        lblColor1 = findViewById(R.id.lblColor1);
+
+        colorSwatch1 = findViewById(R.id.colorSwatch1);
+        presetContainer1 = findViewById(R.id.presetContainer1);
+        hueSlider1 = findViewById(R.id.hueSlider1);
+
         strobeContainer = findViewById(R.id.strobeContainer);
         strobeSlider = findViewById(R.id.strobeSlider);
+
+        colorSwatch2 = findViewById(R.id.colorSwatch2);
+        presetContainer2 = findViewById(R.id.presetContainer2);
+        hueSlider2 = findViewById(R.id.hueSlider2);
+
         ledToggle = findViewById(R.id.ledToggle);
         activateButton = findViewById(R.id.activateButton);
 
@@ -148,25 +150,67 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void setupSliders() {
+        ShapeDrawable.ShaderFactory shaderFactory = new ShapeDrawable.ShaderFactory() {
+            @Override
+            public Shader resize(int width, int height) {
+                return new LinearGradient(0, height / 2f, width, height / 2f,
+                        new int[]{Color.RED, Color.YELLOW, Color.GREEN, Color.CYAN, Color.BLUE, Color.MAGENTA, Color.RED},
+                        null, Shader.TileMode.CLAMP);
+            }
+        };
+
+        float density = getResources().getDisplayMetrics().density;
+        float radius = 8 * density;
+
+        for (SeekBar slider : new SeekBar[]{hueSlider1, hueSlider2}) {
+            ShapeDrawable shape = new ShapeDrawable(new RoundRectShape(
+                    new float[]{radius, radius, radius, radius, radius, radius, radius, radius}, null, null));
+            shape.setShaderFactory(shaderFactory);
+            shape.setIntrinsicHeight((int)(12 * density));
+
+            LayerDrawable ld = new LayerDrawable(new Drawable[]{shape, new ColorDrawable(Color.TRANSPARENT)});
+            ld.setId(0, android.R.id.background);
+            ld.setId(1, android.R.id.progress);
+            slider.setProgressDrawable(ld);
+        }
+    }
+
     private void setupListeners() {
-        hueSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        SeekBar.OnSeekBarChangeListener hueSelectListener = new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
                     float[] hsv = {progress, 1.0f, 1.0f};
-                    updateColorState(Color.HSVToColor(hsv));
+                    int color = Color.HSVToColor(hsv);
+                    if (seekBar == hueSlider1) updateColorState(1, color);
+                    else updateColorState(2, color);
                 }
             }
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {}
-        });
+        };
 
-        modeGroup.setOnCheckedChangeListener((group, checkedId) -> {
-            currentModeId = checkedId;
-            strobeContainer.setVisibility(checkedId == R.id.modeStrobe ? View.VISIBLE : View.GONE);
-        });
+        hueSlider1.setOnSeekBarChangeListener(hueSelectListener);
+        hueSlider2.setOnSeekBarChangeListener(hueSelectListener);
+
+        View.OnClickListener tabListener = v -> {
+            isStrobeMode = (v == tabStrobe);
+
+            tabSolid.setBackgroundResource(isStrobeMode ? 0 : R.drawable.bg_pill_thumb_selected);
+            tabSolid.setTextColor(isStrobeMode ? Color.parseColor("#888888") : Color.WHITE);
+
+            tabStrobe.setBackgroundResource(isStrobeMode ? R.drawable.bg_pill_thumb_selected : 0);
+            tabStrobe.setTextColor(isStrobeMode ? Color.WHITE : Color.parseColor("#888888"));
+
+            strobeContainer.setVisibility(isStrobeMode ? View.VISIBLE : View.GONE);
+            lblColor1.setVisibility(isStrobeMode ? View.VISIBLE : View.GONE);
+        };
+
+        tabSolid.setOnClickListener(tabListener);
+        tabStrobe.setOnClickListener(tabListener);
 
         strobeSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -197,43 +241,67 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupPresets() {
         int[] presets = {
-                Color.WHITE,
-                Color.parseColor("#FFF4E5"), // Warm White
-                Color.RED,
-                Color.GREEN,
-                Color.BLUE,
-                Color.YELLOW,
-                Color.CYAN,
-                Color.MAGENTA,
-                Color.parseColor("#FFA500")  // Orange
+                Color.WHITE, Color.parseColor("#FFF4E5"), Color.RED,
+                Color.GREEN, Color.BLUE, Color.YELLOW,
+                Color.CYAN, Color.MAGENTA, Color.parseColor("#FFA500")
         };
 
         float density = getResources().getDisplayMetrics().density;
         int sizePx = (int) (48 * density);
         int marginPx = (int) (12 * density);
 
-        for (int color : presets) {
-            View presetView = new View(this);
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(sizePx, sizePx);
-            params.setMargins(0, 0, marginPx, 0);
-            presetView.setLayoutParams(params);
-            presetView.setBackgroundColor(color);
-            presetView.setElevation(4f * density);
-            presetView.setOnClickListener(v -> updateColorState(color));
-            presetContainer.addView(presetView);
+        for (int i = 1; i <= 2; i++) {
+            LinearLayout container = i == 1 ? presetContainer1 : presetContainer2;
+            final int index = i;
+
+            for (int color : presets) {
+                View presetView = new View(this);
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(sizePx, sizePx);
+                params.setMargins(0, 0, marginPx, 0);
+                presetView.setLayoutParams(params);
+
+                GradientDrawable circle = new GradientDrawable();
+                circle.setShape(GradientDrawable.OVAL);
+                circle.setColor(color);
+                presetView.setBackground(circle);
+                presetView.setTag(color);
+
+                presetView.setOnClickListener(v -> updateColorState(index, color));
+                container.addView(presetView);
+            }
         }
     }
 
-    private void updateColorState(int color) {
-        currentColor = color;
-        colorSwatch.setBackgroundColor(color);
-        activeFlashlightColor.setBackgroundColor(color);
-
+    private void updateColorState(int index, int color) {
         float[] hsv = new float[3];
         Color.colorToHSV(color, hsv);
-        hueSlider.setProgress((int) hsv[0]);
+        float density = getResources().getDisplayMetrics().density;
 
-        getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR, currentColor).apply();
+        if (index == 1) {
+            currentColor1 = color;
+            colorSwatch1.setBackgroundColor(color);
+            hueSlider1.setProgress((int) hsv[0]);
+            getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR_1, currentColor1).apply();
+
+            for (int i = 0; i < presetContainer1.getChildCount(); i++) {
+                View child = presetContainer1.getChildAt(i);
+                GradientDrawable bg = (GradientDrawable) child.getBackground();
+                int childColor = (int) child.getTag();
+                bg.setStroke(color == childColor ? (int)(3 * density) : 0, Color.WHITE);
+            }
+        } else {
+            currentColor2 = color;
+            colorSwatch2.setBackgroundColor(color);
+            hueSlider2.setProgress((int) hsv[0]);
+            getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR_2, currentColor2).apply();
+
+            for (int i = 0; i < presetContainer2.getChildCount(); i++) {
+                View child = presetContainer2.getChildAt(i);
+                GradientDrawable bg = (GradientDrawable) child.getBackground();
+                int childColor = (int) child.getTag();
+                bg.setStroke(color == childColor ? (int)(3 * density) : 0, Color.WHITE);
+            }
+        }
     }
 
     @Override
@@ -261,10 +329,13 @@ public class MainActivity extends AppCompatActivity {
 
     private void startFlashlight() {
         activeOverlay.setVisibility(View.VISIBLE);
-        activeFlashlightColor.setAlpha(1.0f);
+        int initialColor = currentColor1;
+        activeFlashlightColor.setBackgroundColor(initialColor);
+        activateButton.setTextColor(initialColor);
+
         activeHintText.setVisibility(View.VISIBLE);
         activeHintText.setAlpha(1.0f);
-        
+
         // Fade out hint after 2 seconds
         handler.postDelayed(() -> {
             activeHintText.animate().alpha(0.0f).setDuration(500).withEndAction(() -> activeHintText.setVisibility(View.GONE)).start();
@@ -289,32 +360,20 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Apply mode
-        sosIndex = 0;
-        lightState = true;
-        
-        if (currentModeId == R.id.modeSolid) {
-            setBothLights(true);
-        } else if (currentModeId == R.id.modeStrobe) {
+        isColor1Turn = true;
+
+        if (!isStrobeMode) {
+            activeFlashlightColor.setVisibility(View.VISIBLE);
+            if (useCameraLed) setLedTorch(true);
+        } else {
             handler.post(strobeRunnable);
-        } else if (currentModeId == R.id.modeSos) {
-            handler.post(sosRunnable);
-        } else if (currentModeId == R.id.modePulse) {
-            setLedTorch(useCameraLed); // LED stays on for pulse
-            pulseAnimator = ValueAnimator.ofFloat(1.0f, 0.1f);
-            pulseAnimator.setDuration(1000);
-            pulseAnimator.setRepeatMode(ValueAnimator.REVERSE);
-            pulseAnimator.setRepeatCount(ValueAnimator.INFINITE);
-            pulseAnimator.addUpdateListener(animation -> {
-                float alpha = (float) animation.getAnimatedValue();
-                activeFlashlightColor.setAlpha(alpha);
-            });
-            pulseAnimator.start();
         }
     }
 
     private void stopFlashlight() {
         activeOverlay.setVisibility(View.GONE);
-        
+        activateButton.setTextColor(Color.parseColor("#0D0D0D"));
+
         // Restore System UI
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
 
@@ -328,48 +387,27 @@ public class MainActivity extends AppCompatActivity {
         }
 
         handler.removeCallbacks(strobeRunnable);
-        handler.removeCallbacks(sosRunnable);
-        
-        if (pulseAnimator != null) {
-            pulseAnimator.cancel();
-            pulseAnimator = null;
-        }
-
-        setBothLights(false);
+        if (useCameraLed) setLedTorch(false);
     }
 
     private final Runnable strobeRunnable = new Runnable() {
         @Override
         public void run() {
             if (!isActive) return;
-            setBothLights(lightState);
-            lightState = !lightState;
+
+            int colorToShow = isColor1Turn ? currentColor1 : currentColor2;
+            activeFlashlightColor.setBackgroundColor(colorToShow);
+            activeFlashlightColor.setVisibility(View.VISIBLE);
+
+            if (useCameraLed) {
+                setLedTorch(isColor1Turn);
+            }
+
+            isColor1Turn = !isColor1Turn;
             int delay = 1000 / (strobeFrequency * 2);
             handler.postDelayed(this, delay);
         }
     };
-
-    private final Runnable sosRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (!isActive) return;
-            // State: Even indices mean ON, odd indices mean OFF.
-            boolean isOn = (sosIndex % 2 == 0);
-            setBothLights(isOn);
-            
-            int delay = sosPattern[sosIndex];
-            sosIndex = (sosIndex + 1) % sosPattern.length;
-            
-            handler.postDelayed(this, delay);
-        }
-    };
-
-    private void setBothLights(boolean state) {
-        activeFlashlightColor.setVisibility(state ? View.VISIBLE : View.INVISIBLE);
-        if (useCameraLed) {
-            setLedTorch(state);
-        }
-    }
 
     private void setLedTorch(boolean state) {
         if (cameraManager != null && cameraId != null && isTorchOn != state) {

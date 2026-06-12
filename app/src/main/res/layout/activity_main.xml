@@ -5,7 +5,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/dark_bg"
+    android:background="#0D0D0D"
     tools:context=".MainActivity">
 
     <ScrollView
@@ -18,145 +18,169 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="24dp">
+            android:orientation="vertical">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="LumaLight"
-                android:textSize="32sp"
-                android:textColor="@color/white"
-                android:textStyle="bold"
-                android:layout_marginBottom="24dp" />
-
-            <androidx.cardview.widget.CardView
+            <!-- Pill Toggle for Modes -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="120dp"
-                app:cardCornerRadius="16dp"
-                app:cardBackgroundColor="@color/card_bg"
-                app:cardElevation="0dp"
-                android:layout_marginBottom="24dp">
-
-                <View
-                    android:id="@+id/colorSwatch"
-                    android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_margin="16dp"
+                android:background="@drawable/bg_pill_track"
+                android:orientation="horizontal">
+                
+                <TextView
+                    android:id="@+id/tabSolid"
+                    android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:background="@color/white" />
-            </androidx.cardview.widget.CardView>
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="@string/mode_solid"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_pill_thumb_selected" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Color Presets"
-                android:textColor="@color/white"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
+                <TextView
+                    android:id="@+id/tabStrobe"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="@string/mode_strobe"
+                    android:textColor="#888888"
+                    android:textStyle="bold"
+                    android:background="@null" />
+            </LinearLayout>
 
-            <HorizontalScrollView
+            <!-- Color 1 Section -->
+            <LinearLayout
+                android:id="@+id/color1Section"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:scrollbars="none"
-                android:layout_marginBottom="16dp">
-
-                <LinearLayout
-                    android:id="@+id/presetContainer"
+                android:orientation="vertical">
+                
+                <TextView
+                    android:id="@+id/lblColor1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal" />
-            </HorizontalScrollView>
+                    android:layout_marginStart="16dp"
+                    android:layout_marginBottom="8dp"
+                    android:text="@string/color_1"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/hue_picker"
-                android:textColor="@color/white"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
+                <View
+                    android:id="@+id/colorSwatch1"
+                    android:layout_width="match_parent"
+                    android:layout_height="80dp"
+                    android:background="#FFFFFF" />
 
-            <SeekBar
-                android:id="@+id/hueSlider"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:max="360"
-                android:progress="0"
-                android:layout_marginBottom="24dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Flashlight Mode"
-                android:textColor="@color/white"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
-
-            <RadioGroup
-                android:id="@+id/modeGroup"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:layout_marginBottom="16dp">
-
-                <RadioButton
-                    android:id="@+id/modeSolid"
+                <HorizontalScrollView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/mode_solid"
-                    android:textColor="@color/white"
-                    android:checked="true" />
+                    android:scrollbars="none"
+                    android:layout_marginTop="24dp">
 
-                <RadioButton
-                    android:id="@+id/modeStrobe"
+                    <LinearLayout
+                        android:id="@+id/presetContainer1"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="16dp"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
+
+                <SeekBar
+                    android:id="@+id/hueSlider1"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/white"
-                    android:text="@string/mode_strobe" />
+                    android:layout_margin="24dp"
+                    android:max="360"
+                    android:progress="0"
+                    android:thumb="@drawable/slider_thumb"
+                    android:splitTrack="false"
+                    android:thumbOffset="0dp" />
+            </LinearLayout>
 
-                <RadioButton
-                    android:id="@+id/modeSos"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/white"
-                    android:text="@string/mode_sos" />
-
-                <RadioButton
-                    android:id="@+id/modePulse"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/white"
-                    android:text="@string/mode_pulse" />
-            </RadioGroup>
-
+            <!-- Strobe Settings (Speed + Color 2) -->
             <LinearLayout
                 android:id="@+id/strobeContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:visibility="gone"
-                android:layout_marginBottom="24dp">
+                android:visibility="gone">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
                     android:text="@string/strobe_speed"
-                    android:textColor="@color/white"
-                    android:layout_marginBottom="8dp" />
+                    android:textColor="#FFFFFF" />
 
                 <SeekBar
                     android:id="@+id/strobeSlider"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_margin="16dp"
+                    android:thumb="@drawable/slider_thumb"
+                    android:splitTrack="false"
                     android:max="19"
                     android:progress="9" /> <!-- 1-20 Hz mapped to 0-19 -->
+
+                <TextView
+                    android:id="@+id/lblColor2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginBottom="8dp"
+                    android:text="@string/color_2"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold" />
+
+                <View
+                    android:id="@+id/colorSwatch2"
+                    android:layout_width="match_parent"
+                    android:layout_height="80dp"
+                    android:background="#000000" />
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none"
+                    android:layout_marginTop="24dp">
+
+                    <LinearLayout
+                        android:id="@+id/presetContainer2"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="16dp"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
+
+                <SeekBar
+                    android:id="@+id/hueSlider2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="24dp"
+                    android:max="360"
+                    android:progress="0"
+                    android:thumb="@drawable/slider_thumb"
+                    android:splitTrack="false"
+                    android:thumbOffset="0dp" />
+
             </LinearLayout>
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/ledToggle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_margin="16dp"
                 android:text="@string/toggle_led_torch"
-                android:textColor="@color/white"
-                android:layout_marginBottom="24dp" />
+                android:textColor="#FFFFFF" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="32dp" />
 
         </LinearLayout>
     </ScrollView>
@@ -165,9 +189,13 @@
         android:id="@+id/activateButton"
         android:layout_width="match_parent"
         android:layout_height="64dp"
-        android:layout_margin="24dp"
+        android:layout_margin="16dp"
         android:text="@string/activate"
         android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#0D0D0D"
+        android:backgroundTint="#FFFFFF"
+        app:cornerRadius="0dp"
         app:layout_constraintBottom_toBottomOf="parent" />
 
     <!-- Full screen active overlay -->
@@ -184,7 +212,7 @@
             android:id="@+id/activeFlashlightColor"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/white" />
+            android:background="#FFFFFF" />
 
         <TextView
             android:id="@+id/activeHintText"
