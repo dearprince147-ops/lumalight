@@ -20,7 +20,11 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.transition.AutoTransition;
+import android.transition.TransitionManager;
 import android.util.Log;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -45,7 +49,7 @@ public class MainActivity extends AppCompatActivity {
 
     // UI
     private TextView tabSolid, tabStrobe;
-    private TextView lblColor1;
+    private TextView lblColor1, tvHex1, tvHex2, tvHz, tvHue1, tvHue2;
     private View colorSwatch1, colorSwatch2;
     private LinearLayout presetContainer1, presetContainer2;
     private SeekBar hueSlider1, hueSlider2;
@@ -126,6 +130,11 @@ public class MainActivity extends AppCompatActivity {
         tabSolid = findViewById(R.id.tabSolid);
         tabStrobe = findViewById(R.id.tabStrobe);
         lblColor1 = findViewById(R.id.lblColor1);
+        tvHex1 = findViewById(R.id.tvHex1);
+        tvHex2 = findViewById(R.id.tvHex2);
+        tvHz = findViewById(R.id.tvHz);
+        tvHue1 = findViewById(R.id.tvHue1);
+        tvHue2 = findViewById(R.id.tvHue2);
 
         colorSwatch1 = findViewById(R.id.colorSwatch1);
         presetContainer1 = findViewById(R.id.presetContainer1);
@@ -183,8 +192,11 @@ public class MainActivity extends AppCompatActivity {
                 if (fromUser) {
                     float[] hsv = {progress, 1.0f, 1.0f};
                     int color = Color.HSVToColor(hsv);
-                    if (seekBar == hueSlider1) updateColorState(1, color);
-                    else updateColorState(2, color);
+                    if (seekBar == hueSlider1) {
+                        updateColorState(1, color);
+                    } else {
+                        updateColorState(2, color);
+                    }
                 }
             }
             @Override
@@ -197,7 +209,10 @@ public class MainActivity extends AppCompatActivity {
         hueSlider2.setOnSeekBarChangeListener(hueSelectListener);
 
         View.OnClickListener tabListener = v -> {
+            if (isStrobeMode == (v == tabStrobe)) return;
             isStrobeMode = (v == tabStrobe);
+
+            TransitionManager.beginDelayedTransition((android.view.ViewGroup) findViewById(R.id.scrollView), new AutoTransition().setDuration(200));
 
             tabSolid.setBackgroundResource(isStrobeMode ? 0 : R.drawable.bg_pill_thumb_selected);
             tabSolid.setTextColor(isStrobeMode ? Color.parseColor("#888888") : Color.WHITE);
@@ -209,6 +224,21 @@ public class MainActivity extends AppCompatActivity {
             lblColor1.setVisibility(isStrobeMode ? View.VISIBLE : View.GONE);
         };
 
+        View.OnTouchListener pressAnimListener = (v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    v.animate().scaleX(0.95f).scaleY(0.95f).alpha(0.8f).setDuration(100).start();
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(100).start();
+                    break;
+            }
+            return false;
+        };
+
+        tabSolid.setOnTouchListener(pressAnimListener);
+        tabStrobe.setOnTouchListener(pressAnimListener);
         tabSolid.setOnClickListener(tabListener);
         tabStrobe.setOnClickListener(tabListener);
 
@@ -216,6 +246,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 strobeFrequency = progress + 1; // 1 to 20
+                if (tvHz != null) tvHz.setText(strobeFrequency + " Hz");
             }
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {}
@@ -232,11 +263,21 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        activateButton.setOnClickListener(v -> toggleFlashlight());
-
-        activeOverlay.setOnClickListener(v -> {
-            if (isActive) toggleFlashlight();
+        activateButton.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    v.animate().scaleX(0.95f).scaleY(0.95f).alpha(0.8f).setDuration(100).start();
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(100).start();
+                    v.performClick();
+                    break;
+            }
+            return true;
         });
+
+        activateButton.setOnClickListener(v -> toggleFlashlight());
     }
 
     private void setupPresets() {
@@ -247,12 +288,13 @@ public class MainActivity extends AppCompatActivity {
         };
 
         float density = getResources().getDisplayMetrics().density;
-        int sizePx = (int) (48 * density);
+        int paddingPx = (int) (16 * density);
         int marginPx = (int) (12 * density);
 
         for (int i = 1; i <= 2; i++) {
             LinearLayout container = i == 1 ? presetContainer1 : presetContainer2;
             final int index = i;
+            int sizePx = (int) ((i == 1 ? 48 : 32) * density);
 
             for (int color : presets) {
                 View presetView = new View(this);
@@ -267,6 +309,19 @@ public class MainActivity extends AppCompatActivity {
                 presetView.setTag(color);
 
                 presetView.setOnClickListener(v -> updateColorState(index, color));
+                presetView.setOnTouchListener((v, event) -> {
+                    switch (event.getAction()) {
+                        case MotionEvent.ACTION_DOWN:
+                            v.animate().scaleX(0.85f).scaleY(0.85f).setDuration(100).start();
+                            break;
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_CANCEL:
+                            v.animate().scaleX(1f).scaleY(1f).setDuration(100).start();
+                            // allow click to handle logic
+                            break;
+                    }
+                    return false; // let onClick trigger
+                });
                 container.addView(presetView);
             }
         }
@@ -281,25 +336,29 @@ public class MainActivity extends AppCompatActivity {
             currentColor1 = color;
             colorSwatch1.setBackgroundColor(color);
             hueSlider1.setProgress((int) hsv[0]);
+            if (tvHue1 != null) tvHue1.setText((int)hsv[0] + "°");
+            if (tvHex1 != null) tvHex1.setText(String.format("#%06X", (0xFFFFFF & color)));
             getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR_1, currentColor1).apply();
 
             for (int i = 0; i < presetContainer1.getChildCount(); i++) {
                 View child = presetContainer1.getChildAt(i);
                 GradientDrawable bg = (GradientDrawable) child.getBackground();
                 int childColor = (int) child.getTag();
-                bg.setStroke(color == childColor ? (int)(3 * density) : 0, Color.WHITE);
+                bg.setStroke((int)(2 * density), color == childColor ? Color.WHITE : Color.TRANSPARENT);
             }
         } else {
             currentColor2 = color;
             colorSwatch2.setBackgroundColor(color);
             hueSlider2.setProgress((int) hsv[0]);
+            if (tvHue2 != null) tvHue2.setText((int)hsv[0] + "°");
+            if (tvHex2 != null) tvHex2.setText(String.format("#%06X", (0xFFFFFF & color)));
             getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR_2, currentColor2).apply();
 
             for (int i = 0; i < presetContainer2.getChildCount(); i++) {
                 View child = presetContainer2.getChildAt(i);
                 GradientDrawable bg = (GradientDrawable) child.getBackground();
                 int childColor = (int) child.getTag();
-                bg.setStroke(color == childColor ? (int)(3 * density) : 0, Color.WHITE);
+                bg.setStroke((int)(2 * density), color == childColor ? Color.WHITE : Color.TRANSPARENT);
             }
         }
     }
@@ -331,7 +390,9 @@ public class MainActivity extends AppCompatActivity {
         activeOverlay.setVisibility(View.VISIBLE);
         int initialColor = currentColor1;
         activeFlashlightColor.setBackgroundColor(initialColor);
-        activateButton.setTextColor(initialColor);
+        activateButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#93000A")));
+        activateButton.setTextColor(Color.parseColor("#FFDAD6"));
+        activateButton.setText("STOP");
 
         activeHintText.setVisibility(View.VISIBLE);
         activeHintText.setAlpha(1.0f);
@@ -372,7 +433,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void stopFlashlight() {
         activeOverlay.setVisibility(View.GONE);
-        activateButton.setTextColor(Color.parseColor("#0D0D0D"));
+        activateButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#00FF00")));
+        activateButton.setTextColor(Color.parseColor("#002200"));
+        activateButton.setText("ACTIVATE");
 
         // Restore System UI
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
@@ -428,5 +491,14 @@ public class MainActivity extends AppCompatActivity {
             // Automatically reset toggle state to keep UI in sync
             isActive = false;
         }
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (isActive && (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            toggleFlashlight();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 }
