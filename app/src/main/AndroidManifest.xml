@@ -27,6 +27,56 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Flashlight home screen widget -->
+        <receiver
+            android:name=".widget.FlashlightWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/flashlight_widget_info" />
+        </receiver>
+
+        <!-- Strobe home screen widget -->
+        <receiver
+            android:name=".widget.StrobeWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/strobe_widget_info" />
+        </receiver>
+
+        <!-- Shared color-picker shown while either widget is being placed -->
+        <activity
+            android:name=".widget.WidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/Theme.MyApplication">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Instant full-screen light launched by tapping the Flashlight widget -->
+        <activity
+            android:name=".widget.QuickFlashlightActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.MyApplication" />
+
+        <!-- Instant full-screen strobe launched by tapping the Strobe widget -->
+        <activity
+            android:name=".widget.QuickStrobeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.MyApplication" />
     </application>
 
 </manifest>

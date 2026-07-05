@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:paddingHorizontal="20dp"
+    android:paddingTop="32dp"
+    android:paddingBottom="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvConfigureTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="CHOOSE WIDGET COLOR"
+            android:fontFamily="@font/hanken_grotesk"
+            android:textSize="20sp"
+            android:letterSpacing="0.1"
+            android:textStyle="bold"
+            android:textColor="#E5E2E1"
+            android:layout_marginBottom="24dp" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="150dp"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="#2A2A2A"
+            android:layout_marginBottom="16dp">
+            <View
+                android:id="@+id/configureSwatch"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#FFFFFF" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:layout_marginBottom="24dp">
+            <LinearLayout
+                android:id="@+id/configurePresetContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="HUE SELECTION"
+                android:fontFamily="@font/jetbrains_mono"
+                android:textSize="12sp"
+                android:textColor="#B9CCAF" />
+            <TextView
+                android:id="@+id/tvConfigureHue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0°"
+                android:fontFamily="@font/jetbrains_mono"
+                android:textSize="14sp"
+                android:textColor="#77FF61" />
+        </LinearLayout>
+
+        <SeekBar
+            android:id="@+id/configureHueSlider"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="360"
+            android:thumb="@drawable/slider_thumb"
+            android:progressDrawable="@android:color/transparent"
+            android:splitTrack="false"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="BRIGHTNESS"
+                android:fontFamily="@font/jetbrains_mono"
+                android:textSize="12sp"
+                android:textColor="#B9CCAF" />
+            <TextView
+                android:id="@+id/tvConfigureBrightness"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="100%"
+                android:fontFamily="@font/jetbrains_mono"
+                android:textSize="14sp"
+                android:textColor="#77FF61" />
+        </LinearLayout>
+
+        <SeekBar
+            android:id="@+id/configureBrightnessSlider"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="100"
+            android:thumb="@drawable/slider_thumb"
+            android:progressDrawable="@android:color/transparent"
+            android:splitTrack="false"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddWidget"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            app:backgroundTint="@color/primaryGreen"
+            app:cornerRadius="8dp"
+            android:text="ADD WIDGET"
+            android:textColor="#002200"
+            android:textSize="20sp"
+            android:fontFamily="@font/hanken_grotesk"
+            android:textStyle="bold"
+            android:letterSpacing="0.15"
+            android:layout_marginTop="32dp" />
+    </LinearLayout>
+</ScrollView>

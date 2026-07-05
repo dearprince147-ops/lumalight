@@ -1,5 +1,7 @@
 package com.example;
 
+import android.animation.ArgbEvaluator;
+import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -27,6 +29,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.animation.OvershootInterpolator;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -50,9 +53,11 @@ public class MainActivity extends AppCompatActivity {
     // UI
     private TextView tabSolid, tabStrobe;
     private TextView lblColor1, tvHex1, tvHex2, tvHz, tvHue1, tvHue2;
+    private TextView tvBrightness1, tvBrightness2;
     private View colorSwatch1, colorSwatch2;
     private LinearLayout presetContainer1, presetContainer2;
     private SeekBar hueSlider1, hueSlider2;
+    private SeekBar brightnessSlider1, brightnessSlider2;
     private LinearLayout strobeContainer;
     private SeekBar strobeSlider;
     private SwitchMaterial ledToggle;
@@ -65,6 +70,11 @@ public class MainActivity extends AppCompatActivity {
     // State
     private int currentColor1 = Color.WHITE;
     private int currentColor2 = Color.BLACK;
+    // Hue (0-360) and brightness/value (0-100) are tracked separately from the
+    // resulting RGB color so a hue can be "remembered" even while brightness is
+    // dialed all the way down to black (where hue becomes visually meaningless).
+    private float hue1 = 0f, hue2 = 0f;
+    private int brightness1 = 100, brightness2 = 0;
     private boolean isStrobeMode = false;
     private boolean isActive = false;
     private int strobeFrequency = 10; // 1 to 20 Hz
@@ -139,6 +149,8 @@ public class MainActivity extends AppCompatActivity {
         colorSwatch1 = findViewById(R.id.colorSwatch1);
         presetContainer1 = findViewById(R.id.presetContainer1);
         hueSlider1 = findViewById(R.id.hueSlider1);
+        brightnessSlider1 = findViewById(R.id.brightnessSlider1);
+        tvBrightness1 = findViewById(R.id.tvBrightness1);
 
         strobeContainer = findViewById(R.id.strobeContainer);
         strobeSlider = findViewById(R.id.strobeSlider);
@@ -146,6 +158,8 @@ public class MainActivity extends AppCompatActivity {
         colorSwatch2 = findViewById(R.id.colorSwatch2);
         presetContainer2 = findViewById(R.id.presetContainer2);
         hueSlider2 = findViewById(R.id.hueSlider2);
+        brightnessSlider2 = findViewById(R.id.brightnessSlider2);
+        tvBrightness2 = findViewById(R.id.tvBrightness2);
 
         ledToggle = findViewById(R.id.ledToggle);
         activateButton = findViewById(R.id.activateButton);
@@ -183,6 +197,28 @@ public class MainActivity extends AppCompatActivity {
             ld.setId(1, android.R.id.progress);
             slider.setProgressDrawable(ld);
         }
+
+        // Brightness/value track: a static black -> white gradient. This is what
+        // makes "black" (and every shade in between) reachable, since the hue
+        // slider alone can only ever produce fully-saturated, fully-bright hues.
+        ShapeDrawable.ShaderFactory brightnessShaderFactory = new ShapeDrawable.ShaderFactory() {
+            @Override
+            public Shader resize(int width, int height) {
+                return new LinearGradient(0, height / 2f, width, height / 2f,
+                        Color.BLACK, Color.WHITE, Shader.TileMode.CLAMP);
+            }
+        };
+        for (SeekBar slider : new SeekBar[]{brightnessSlider1, brightnessSlider2}) {
+            ShapeDrawable shape = new ShapeDrawable(new RoundRectShape(
+                    new float[]{radius, radius, radius, radius, radius, radius, radius, radius}, null, null));
+            shape.setShaderFactory(brightnessShaderFactory);
+            shape.setIntrinsicHeight((int)(12 * density));
+
+            LayerDrawable ld = new LayerDrawable(new Drawable[]{shape, new ColorDrawable(Color.TRANSPARENT)});
+            ld.setId(0, android.R.id.background);
+            ld.setId(1, android.R.id.progress);
+            slider.setProgressDrawable(ld);
+        }
     }
 
     private void setupListeners() {
@@ -190,12 +226,10 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
-                    float[] hsv = {progress, 1.0f, 1.0f};
-                    int color = Color.HSVToColor(hsv);
                     if (seekBar == hueSlider1) {
-                        updateColorState(1, color);
+                        applyHueBrightness(1, progress, brightness1);
                     } else {
-                        updateColorState(2, color);
+                        applyHueBrightness(2, progress, brightness2);
                     }
                 }
             }
@@ -207,6 +241,26 @@ public class MainActivity extends AppCompatActivity {
 
         hueSlider1.setOnSeekBarChangeListener(hueSelectListener);
         hueSlider2.setOnSeekBarChangeListener(hueSelectListener);
+
+        SeekBar.OnSeekBarChangeListener brightnessSelectListener = new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    if (seekBar == brightnessSlider1) {
+                        applyHueBrightness(1, hue1, progress);
+                    } else {
+                        applyHueBrightness(2, hue2, progress);
+                    }
+                }
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        };
+
+        brightnessSlider1.setOnSeekBarChangeListener(brightnessSelectListener);
+        brightnessSlider2.setOnSeekBarChangeListener(brightnessSelectListener);
 
         View.OnClickListener tabListener = v -> {
             if (isStrobeMode == (v == tabStrobe)) return;
@@ -270,7 +324,9 @@ public class MainActivity extends AppCompatActivity {
                     break;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
-                    v.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(100).start();
+                    v.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(180)
+                            .setInterpolator(new OvershootInterpolator())
+                            .start();
                     v.performClick();
                     break;
             }
@@ -316,7 +372,9 @@ public class MainActivity extends AppCompatActivity {
                             break;
                         case MotionEvent.ACTION_UP:
                         case MotionEvent.ACTION_CANCEL:
-                            v.animate().scaleX(1f).scaleY(1f).setDuration(100).start();
+                            v.animate().scaleX(1f).scaleY(1f).setDuration(180)
+                                    .setInterpolator(new OvershootInterpolator())
+                                    .start();
                             // allow click to handle logic
                             break;
                     }
@@ -327,16 +385,34 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Builds a color from a hue (0-360) and brightness/value (0-100) at full
+     * saturation and routes it through updateColorState. At brightness 0 this
+     * always resolves to black, regardless of hue - this is what makes black
+     * (and every shade down to it) reachable from the UI.
+     */
+    private void applyHueBrightness(int index, float hue, int brightnessPercent) {
+        float[] hsv = {hue, 1.0f, brightnessPercent / 100f};
+        int color = Color.HSVToColor(hsv);
+        updateColorState(index, color);
+    }
+
     private void updateColorState(int index, int color) {
         float[] hsv = new float[3];
         Color.colorToHSV(color, hsv);
+        int brightnessPercent = Math.round(hsv[2] * 100);
         float density = getResources().getDisplayMetrics().density;
 
         if (index == 1) {
+            int previousColor = currentColor1;
             currentColor1 = color;
-            colorSwatch1.setBackgroundColor(color);
+            hue1 = hsv[0];
+            brightness1 = brightnessPercent;
+            animateSwatchColor(colorSwatch1, previousColor, color);
             hueSlider1.setProgress((int) hsv[0]);
+            brightnessSlider1.setProgress(brightnessPercent);
             if (tvHue1 != null) tvHue1.setText((int)hsv[0] + "°");
+            if (tvBrightness1 != null) tvBrightness1.setText(brightnessPercent + "%");
             if (tvHex1 != null) tvHex1.setText(String.format("#%06X", (0xFFFFFF & color)));
             getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR_1, currentColor1).apply();
 
@@ -347,10 +423,15 @@ public class MainActivity extends AppCompatActivity {
                 bg.setStroke((int)(2 * density), color == childColor ? Color.WHITE : Color.TRANSPARENT);
             }
         } else {
+            int previousColor = currentColor2;
             currentColor2 = color;
-            colorSwatch2.setBackgroundColor(color);
+            hue2 = hsv[0];
+            brightness2 = brightnessPercent;
+            animateSwatchColor(colorSwatch2, previousColor, color);
             hueSlider2.setProgress((int) hsv[0]);
+            brightnessSlider2.setProgress(brightnessPercent);
             if (tvHue2 != null) tvHue2.setText((int)hsv[0] + "°");
+            if (tvBrightness2 != null) tvBrightness2.setText(brightnessPercent + "%");
             if (tvHex2 != null) tvHex2.setText(String.format("#%06X", (0xFFFFFF & color)));
             getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR_2, currentColor2).apply();
 
@@ -361,6 +442,18 @@ public class MainActivity extends AppCompatActivity {
                 bg.setStroke((int)(2 * density), color == childColor ? Color.WHITE : Color.TRANSPARENT);
             }
         }
+    }
+
+    /** Smoothly crossfades a swatch's background color instead of snapping to it. */
+    private void animateSwatchColor(View swatch, int fromColor, int toColor) {
+        if (fromColor == toColor) {
+            swatch.setBackgroundColor(toColor);
+            return;
+        }
+        ValueAnimator animator = ValueAnimator.ofObject(new ArgbEvaluator(), fromColor, toColor);
+        animator.setDuration(150);
+        animator.addUpdateListener(a -> swatch.setBackgroundColor((int) a.getAnimatedValue()));
+        animator.start();
     }
 
     @Override
@@ -387,7 +480,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startFlashlight() {
+        activeOverlay.setAlpha(0f);
         activeOverlay.setVisibility(View.VISIBLE);
+        activeOverlay.animate().alpha(1f).setDuration(150).start();
         int initialColor = currentColor1;
         activeFlashlightColor.setBackgroundColor(initialColor);
         activateButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#93000A")));
@@ -424,15 +519,22 @@ public class MainActivity extends AppCompatActivity {
         isColor1Turn = true;
 
         if (!isStrobeMode) {
+            activeFlashlightColor.setLayerType(View.LAYER_TYPE_NONE, null);
             activeFlashlightColor.setVisibility(View.VISIBLE);
             if (useCameraLed) setLedTorch(true);
         } else {
+            // Hardware layer speeds up compositing since the strobe swaps this
+            // view's background color many times per second.
+            activeFlashlightColor.setLayerType(View.LAYER_TYPE_HARDWARE, null);
             handler.post(strobeRunnable);
         }
     }
 
     private void stopFlashlight() {
-        activeOverlay.setVisibility(View.GONE);
+        activeOverlay.animate().alpha(0f).setDuration(120)
+                .withEndAction(() -> activeOverlay.setVisibility(View.GONE))
+                .start();
+        activeFlashlightColor.setLayerType(View.LAYER_TYPE_NONE, null);
         activateButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#00FF00")));
         activateButton.setTextColor(Color.parseColor("#002200"));
         activateButton.setText("ACTIVATE");

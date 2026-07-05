@@ -11,4 +11,7 @@
     <string name="toggle_led_torch">Sync Camera LED</string>
     <string name="color_1">Color 1</string>
     <string name="color_2">Color 2</string>
+    <!-- Widgets -->
+    <string name="widget_flashlight_label">LumaLight Flashlight</string>
+    <string name="widget_strobe_label">LumaLight Strobe</string>
 </resources>

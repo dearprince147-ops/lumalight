@@ -183,6 +183,45 @@
                         android:splitTrack="false"
                         android:paddingStart="12dp"
                         android:paddingEnd="12dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginTop="16dp"
+                        android:layout_marginBottom="8dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="BRIGHTNESS"
+                            android:fontFamily="@font/jetbrains_mono"
+                            android:textSize="12sp"
+                            android:textColor="#B9CCAF" />
+
+                        <TextView
+                            android:id="@+id/tvBrightness1"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="100%"
+                            android:fontFamily="@font/jetbrains_mono"
+                            android:textSize="14sp"
+                            android:textColor="#77FF61" />
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/brightnessSlider1"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:max="100"
+                        android:progress="100"
+                        android:thumb="@drawable/slider_thumb"
+                        android:progressDrawable="@android:color/transparent"
+                        android:splitTrack="false"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp" />
                 </LinearLayout>
 
                 <!-- Strobe Section -->
@@ -280,6 +319,45 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:max="360"
+                            android:thumb="@drawable/slider_thumb"
+                            android:progressDrawable="@android:color/transparent"
+                            android:splitTrack="false"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginTop="16dp"
+                            android:layout_marginBottom="8dp">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="BRIGHTNESS"
+                                android:fontFamily="@font/jetbrains_mono"
+                                android:textSize="12sp"
+                                android:textColor="#B9CCAF" />
+
+                            <TextView
+                                android:id="@+id/tvBrightness2"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="0%"
+                                android:fontFamily="@font/jetbrains_mono"
+                                android:textSize="14sp"
+                                android:textColor="#77FF61" />
+                        </LinearLayout>
+
+                        <SeekBar
+                            android:id="@+id/brightnessSlider2"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:max="100"
+                            android:progress="0"
                             android:thumb="@drawable/slider_thumb"
                             android:progressDrawable="@android:color/transparent"
                             android:splitTrack="false"
