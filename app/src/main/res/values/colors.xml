@@ -10,4 +10,13 @@
     <color name="dark_bg">#0D0D0D</color>
     <color name="card_bg">#1A1A1A</color>
     <color name="primaryGreen">#00FF00</color>
+
+    <!-- Activate/Stop button states (previously Color.parseColor literals in MainActivity.java) -->
+    <color name="button_inactive_bg">#00FF00</color>
+    <color name="button_inactive_text">#002200</color>
+    <color name="button_active_bg">#93000A</color>
+    <color name="button_active_text">#FFDAD6</color>
+
+    <!-- Tab pill text -->
+    <color name="tab_inactive_text">#888888</color>
 </resources>

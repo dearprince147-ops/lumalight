@@ -1,4 +1,4 @@
-package com.example.widget;
+package com.azlan.lumalight.widget;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
@@ -7,7 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.widget.RemoteViews;
 
-import com.example.R;
+import com.azlan.lumalight.R;
 
 public class FlashlightWidgetProvider extends AppWidgetProvider {
 

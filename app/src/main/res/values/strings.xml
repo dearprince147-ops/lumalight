@@ -1,7 +1,8 @@
 <resources>
     <string name="app_name">LumaLight</string>
     <string name="activate">ACTIVATE</string>
-    <string name="active_hint">Tap anywhere to exit</string>
+    <string name="stop">STOP</string>
+    <string name="active_hint">Tap anywhere or press volume up/down to stop</string>
     <!-- Modes -->
     <string name="mode_solid">SOLID</string>
     <string name="mode_strobe">STROBE</string>

@@ -1,4 +1,4 @@
-package com.example.widget;
+package com.azlan.lumalight.widget;
 
 import android.content.Context;
 import android.content.SharedPreferences;

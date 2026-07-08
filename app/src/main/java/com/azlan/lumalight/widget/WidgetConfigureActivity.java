@@ -1,4 +1,4 @@
-package com.example.widget;
+package com.azlan.lumalight.widget;
 
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
@@ -20,7 +20,7 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.example.R;
+import com.azlan.lumalight.R;
 
 /**
  * Single shared configure screen for both the Flashlight and Strobe widgets.

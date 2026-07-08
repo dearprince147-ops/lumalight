@@ -1,15 +1,19 @@
 name: Build and Release APK
 
-# Two ways to trigger this:
-#  1. Push a tag like "v1.1.0" -> builds and publishes a proper GitHub Release
-#     named after the tag.
+# Three ways this fires:
+#  1. Push to main -> builds a signed release APK and publishes/updates a
+#     rolling pre-release tagged "latest". The download link never changes:
+#       https://github.com/dearprince147-ops/lumalight/releases/download/latest/lumalight-latest.apk
+#     This is what a plain `git add -A && git commit && git push` from Termux
+#     lands you in the Releases tab a few minutes later.
+#  2. Push a tag like "v1.1.0" -> builds and publishes a proper named GitHub
+#     Release for that version.
 #       git tag v1.1.0 && git push origin v1.1.0
-#  2. Actions tab -> "Build and Release APK" -> "Run workflow" -> builds and
-#     publishes a rolling pre-release named after the run number, no tag
-#     needed. Handy for grabbing a fresh build from Termux without a full
-#     Android Studio setup.
+#  3. Actions tab -> "Build and Release APK" -> "Run workflow" -> manual
+#     rolling build, same as (1) but on demand.
 on:
   push:
+    branches: [main]
     tags:
       - "v*"
   workflow_dispatch: {}
@@ -23,6 +27,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history + tags, not the default shallow clone - build.gradle.kts
+          # runs `git describe`/`git rev-list --count` to derive versionName/
+          # versionCode, which need real history to work.
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -33,28 +42,51 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Prepare signing keystore
+        id: keystore
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_B64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "path=$RUNNER_TEMP/release.jks" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "::warning::KEYSTORE_B64 secret not set - building an UNSIGNED release APK. See Section 5 of the improvement plan for the one-time keytool + secrets setup."
+          fi
+
+      - name: Build release APK
+        env:
+          KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.KEY_PASS }}
+        run: ./gradlew assembleRelease --stacktrace
 
       - name: Locate APK
         id: apk
         run: |
-          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           echo "path=$APK_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Rename APK
         id: rename
         run: |
-          VERSION="${GITHUB_REF_NAME:-run-${GITHUB_RUN_NUMBER}}"
-          NEW_NAME="lumalight-${VERSION}.apk"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            NEW_NAME="lumalight-${GITHUB_REF_NAME}.apk"
+          else
+            NEW_NAME="lumalight-latest.apk"
+          fi
           cp "${{ steps.apk.outputs.path }}" "$NEW_NAME"
           echo "name=$NEW_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}"
-          name: "${{ github.ref_type == 'tag' && github.ref_name || format('Build {0}', github.run_number) }}"
+          # Tag pushes get their own named release. Everything else (push to
+          # main, manual dispatch) republishes the single rolling "latest"
+          # release - action-gh-release updates it in place when the tag
+          # already exists, which is what keeps the download link stable.
+          tag_name: "${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}"
+          name: "${{ github.ref_type == 'tag' && github.ref_name || 'Latest build' }}"
           prerelease: ${{ github.ref_type != 'tag' }}
           files: "${{ steps.rename.outputs.name }}"
-          generate_release_notes: true
+          generate_release_notes: ${{ github.ref_type == 'tag' }}

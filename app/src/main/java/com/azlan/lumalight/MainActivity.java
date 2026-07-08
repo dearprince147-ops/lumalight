@@ -1,4 +1,4 @@
-package com.example;
+package com.azlan.lumalight;
 
 import android.animation.ArgbEvaluator;
 import android.animation.ValueAnimator;
@@ -22,6 +22,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.transition.AutoTransition;
 import android.transition.TransitionManager;
 import android.util.Log;
@@ -37,6 +38,7 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -49,6 +51,10 @@ public class MainActivity extends AppCompatActivity {
     private static final String PREF_COLOR_1 = "pref_color_1";
     private static final String PREF_COLOR_2 = "pref_color_2";
     private static final int PERMISSION_REQUEST_CAMERA = 1001;
+    // Camera2 torch toggling is slow on many devices (LG V30 included) and can
+    // throw CameraAccessException if strobed too fast, so LED-synced strobe is
+    // capped lower than the screen-only strobe (which can still hit 20 Hz).
+    private static final int LED_STROBE_MAX_HZ = 10;
 
     // UI
     private TextView tabSolid, tabStrobe;
@@ -74,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
     // resulting RGB color so a hue can be "remembered" even while brightness is
     // dialed all the way down to black (where hue becomes visually meaningless).
     private float hue1 = 0f, hue2 = 0f;
+    private float sat1 = 1f, sat2 = 1f;
     private int brightness1 = 100, brightness2 = 0;
     private boolean isStrobeMode = false;
     private boolean isActive = false;
@@ -90,6 +97,8 @@ public class MainActivity extends AppCompatActivity {
     // Timing & Animation
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean isColor1Turn = true;
+    private long strobeStartUptime;
+    private int strobeStepCount;
 
     @SuppressLint("InvalidWakeLockTag")
     @Override
@@ -113,6 +122,18 @@ public class MainActivity extends AppCompatActivity {
         setupPresets();
         updateColorState(1, currentColor1);
         updateColorState(2, currentColor2);
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (isActive) {
+                    toggleFlashlight();
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                }
+            }
+        });
     }
 
     private void initCamera() {
@@ -236,7 +257,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {}
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                persistColor(seekBar == hueSlider1 ? 1 : 2);
+            }
         };
 
         hueSlider1.setOnSeekBarChangeListener(hueSelectListener);
@@ -256,7 +279,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {}
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                persistColor(seekBar == brightnessSlider1 ? 1 : 2);
+            }
         };
 
         brightnessSlider1.setOnSeekBarChangeListener(brightnessSelectListener);
@@ -268,11 +293,12 @@ public class MainActivity extends AppCompatActivity {
 
             TransitionManager.beginDelayedTransition((android.view.ViewGroup) findViewById(R.id.scrollView), new AutoTransition().setDuration(200));
 
+            int inactiveTextColor = ContextCompat.getColor(this, R.color.tab_inactive_text);
             tabSolid.setBackgroundResource(isStrobeMode ? 0 : R.drawable.bg_pill_thumb_selected);
-            tabSolid.setTextColor(isStrobeMode ? Color.parseColor("#888888") : Color.WHITE);
+            tabSolid.setTextColor(isStrobeMode ? inactiveTextColor : Color.WHITE);
 
             tabStrobe.setBackgroundResource(isStrobeMode ? R.drawable.bg_pill_thumb_selected : 0);
-            tabStrobe.setTextColor(isStrobeMode ? Color.WHITE : Color.parseColor("#888888"));
+            tabStrobe.setTextColor(isStrobeMode ? Color.WHITE : inactiveTextColor);
 
             strobeContainer.setVisibility(isStrobeMode ? View.VISIBLE : View.GONE);
             lblColor1.setVisibility(isStrobeMode ? View.VISIBLE : View.GONE);
@@ -314,8 +340,18 @@ public class MainActivity extends AppCompatActivity {
                 ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.CAMERA}, PERMISSION_REQUEST_CAMERA);
             } else {
                 useCameraLed = isChecked;
+                if (isActive && !isChecked) {
+                    // Without this, the torch stays lit until the whole
+                    // session ends (stopFlashlight only ran setLedTorch(false)
+                    // when useCameraLed was still true).
+                    setLedTorch(false);
+                }
             }
         });
+
+        // B2: tapping anywhere on the active overlay stops the light, matching
+        // the hint text (previously there was no listener at all).
+        activeOverlay.setOnClickListener(v -> toggleFlashlight());
 
         activateButton.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
@@ -364,7 +400,10 @@ public class MainActivity extends AppCompatActivity {
                 presetView.setBackground(circle);
                 presetView.setTag(color);
 
-                presetView.setOnClickListener(v -> updateColorState(index, color));
+                presetView.setOnClickListener(v -> {
+                    updateColorState(index, color);
+                    persistColor(index);
+                });
                 presetView.setOnTouchListener((v, event) -> {
                     switch (event.getAction()) {
                         case MotionEvent.ACTION_DOWN:
@@ -386,15 +425,31 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Builds a color from a hue (0-360) and brightness/value (0-100) at full
-     * saturation and routes it through updateColorState. At brightness 0 this
-     * always resolves to black, regardless of hue - this is what makes black
-     * (and every shade down to it) reachable from the UI.
+     * Builds a color from a hue (0-360) and brightness/value (0-100), keeping
+     * the color's current saturation, and routes it through updateColorState.
+     * Saturation is only ever set explicitly by presets (see setupPresets) -
+     * previously this hardcoded saturation to 1.0f, which meant picking a
+     * low-saturation preset (like WHITE) and then nudging either slider would
+     * snap it straight to a fully-saturated color, making white and pastels
+     * unreachable from the sliders. At brightness 0 this still always
+     * resolves to black regardless of hue or saturation.
      */
     private void applyHueBrightness(int index, float hue, int brightnessPercent) {
-        float[] hsv = {hue, 1.0f, brightnessPercent / 100f};
+        float saturation = index == 1 ? sat1 : sat2;
+        float[] hsv = {hue, saturation, brightnessPercent / 100f};
         int color = Color.HSVToColor(hsv);
         updateColorState(index, color);
+    }
+
+    /** Writes only the given color slot to SharedPreferences. */
+    private void persistColor(int index) {
+        SharedPreferences.Editor editor = getPreferences(MODE_PRIVATE).edit();
+        if (index == 1) {
+            editor.putInt(PREF_COLOR_1, currentColor1);
+        } else {
+            editor.putInt(PREF_COLOR_2, currentColor2);
+        }
+        editor.apply();
     }
 
     private void updateColorState(int index, int color) {
@@ -407,6 +462,7 @@ public class MainActivity extends AppCompatActivity {
             int previousColor = currentColor1;
             currentColor1 = color;
             hue1 = hsv[0];
+            sat1 = hsv[1];
             brightness1 = brightnessPercent;
             animateSwatchColor(colorSwatch1, previousColor, color);
             hueSlider1.setProgress((int) hsv[0]);
@@ -414,7 +470,6 @@ public class MainActivity extends AppCompatActivity {
             if (tvHue1 != null) tvHue1.setText((int)hsv[0] + "°");
             if (tvBrightness1 != null) tvBrightness1.setText(brightnessPercent + "%");
             if (tvHex1 != null) tvHex1.setText(String.format("#%06X", (0xFFFFFF & color)));
-            getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR_1, currentColor1).apply();
 
             for (int i = 0; i < presetContainer1.getChildCount(); i++) {
                 View child = presetContainer1.getChildAt(i);
@@ -426,6 +481,7 @@ public class MainActivity extends AppCompatActivity {
             int previousColor = currentColor2;
             currentColor2 = color;
             hue2 = hsv[0];
+            sat2 = hsv[1];
             brightness2 = brightnessPercent;
             animateSwatchColor(colorSwatch2, previousColor, color);
             hueSlider2.setProgress((int) hsv[0]);
@@ -433,7 +489,6 @@ public class MainActivity extends AppCompatActivity {
             if (tvHue2 != null) tvHue2.setText((int)hsv[0] + "°");
             if (tvBrightness2 != null) tvBrightness2.setText(brightnessPercent + "%");
             if (tvHex2 != null) tvHex2.setText(String.format("#%06X", (0xFFFFFF & color)));
-            getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR_2, currentColor2).apply();
 
             for (int i = 0; i < presetContainer2.getChildCount(); i++) {
                 View child = presetContainer2.getChildAt(i);
@@ -485,9 +540,9 @@ public class MainActivity extends AppCompatActivity {
         activeOverlay.animate().alpha(1f).setDuration(150).start();
         int initialColor = currentColor1;
         activeFlashlightColor.setBackgroundColor(initialColor);
-        activateButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#93000A")));
-        activateButton.setTextColor(Color.parseColor("#FFDAD6"));
-        activateButton.setText("STOP");
+        activateButton.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.button_active_bg));
+        activateButton.setTextColor(ContextCompat.getColor(this, R.color.button_active_text));
+        activateButton.setText(R.string.stop);
 
         activeHintText.setVisibility(View.VISIBLE);
         activeHintText.setAlpha(1.0f);
@@ -512,7 +567,9 @@ public class MainActivity extends AppCompatActivity {
         getWindow().setAttributes(layoutParams);
 
         if (wakeLock != null && !wakeLock.isHeld()) {
-            wakeLock.acquire();
+            // 30-minute safety cap: invisible during normal use, but protects
+            // the battery if any code path ever misses stopFlashlight().
+            wakeLock.acquire(30 * 60 * 1000L);
         }
 
         // Apply mode
@@ -526,6 +583,8 @@ public class MainActivity extends AppCompatActivity {
             // Hardware layer speeds up compositing since the strobe swaps this
             // view's background color many times per second.
             activeFlashlightColor.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+            strobeStartUptime = SystemClock.uptimeMillis();
+            strobeStepCount = 0;
             handler.post(strobeRunnable);
         }
     }
@@ -535,9 +594,9 @@ public class MainActivity extends AppCompatActivity {
                 .withEndAction(() -> activeOverlay.setVisibility(View.GONE))
                 .start();
         activeFlashlightColor.setLayerType(View.LAYER_TYPE_NONE, null);
-        activateButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#00FF00")));
-        activateButton.setTextColor(Color.parseColor("#002200"));
-        activateButton.setText("ACTIVATE");
+        activateButton.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.button_inactive_bg));
+        activateButton.setTextColor(ContextCompat.getColor(this, R.color.button_inactive_text));
+        activateButton.setText(R.string.activate);
 
         // Restore System UI
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
@@ -552,7 +611,11 @@ public class MainActivity extends AppCompatActivity {
         }
 
         handler.removeCallbacks(strobeRunnable);
-        if (useCameraLed) setLedTorch(false);
+        // Always attempt to release the torch - setLedTorch() is idempotent
+        // (it checks isTorchOn internally), so this is safe even if
+        // useCameraLed was flipped off mid-session, and guarantees the LED
+        // never stays stuck on.
+        setLedTorch(false);
     }
 
     private final Runnable strobeRunnable = new Runnable() {
@@ -564,13 +627,22 @@ public class MainActivity extends AppCompatActivity {
             activeFlashlightColor.setBackgroundColor(colorToShow);
             activeFlashlightColor.setVisibility(View.VISIBLE);
 
-            if (useCameraLed) {
+            if (useCameraLed && strobeFrequency <= LED_STROBE_MAX_HZ) {
                 setLedTorch(isColor1Turn);
             }
 
             isColor1Turn = !isColor1Turn;
-            int delay = 1000 / (strobeFrequency * 2);
-            handler.postDelayed(this, delay);
+            strobeStepCount++;
+
+            // Float period, scheduled against a fixed absolute start time
+            // (postAtTime) instead of integer-divided postDelayed(). The old
+            // "1000 / (freq * 2)" truncated to an int, so e.g. 3 Hz actually
+            // ran at ~3.01 Hz and 7 Hz at ~7.04 Hz, and because each delay was
+            // queued relative to "now" rather than the original schedule, the
+            // error compounded and the strobe slowly desynced over time.
+            float periodMs = 1000f / (strobeFrequency * 2);
+            long nextUptime = strobeStartUptime + Math.round(strobeStepCount * periodMs);
+            handler.postAtTime(this, nextUptime);
         }
     };
 
