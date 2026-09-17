@@ -1,5 +1,4 @@
 import java.io.ByteArrayOutputStream
-import org.gradle.kotlin.dsl.exec
 
 plugins {
     alias(libs.plugins.android.application)
@@ -7,15 +6,15 @@ plugins {
 
 /** Runs a git command and returns trimmed stdout, or "" if git/the repo isn't available. */
 fun runGit(vararg args: String): String {
+    val out = ByteArrayOutputStream()
     return try {
-        val out = ByteArrayOutputStream()
-        exec {
+        project.exec {
             commandLine(listOf("git") + args)
             standardOutput = out
             isIgnoreExitValue = true
         }
-        out.toString().trim()
-    } catch (e: Exception) {
+        out.toString(Charsets.UTF_8.name()).trim()
+    } catch (_: Exception) {
         ""
     }
 }
@@ -36,16 +35,12 @@ android {
         applicationId = "com.azlan.lumalight"
         minSdk = 23
         targetSdk = 34
-        versionCode = gitCommitCount
         versionName = gitDescribe
+        versionCode = gitCommitCount
     }
 
     signingConfigs {
         create("release") {
-            // Populated from GitHub Actions secrets (KEYSTORE_PATH points at the
-            // keystore decoded from the base64'd KEYSTORE_B64 secret - see
-            // release.yml). Left unconfigured for local builds without secrets,
-            // in which case the release build type below skips signing.
             val keystorePath = System.getenv("KEYSTORE_PATH")
             if (!keystorePath.isNullOrBlank()) {
                 storeFile = file(keystorePath)
