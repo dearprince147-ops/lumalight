@@ -1,31 +1,16 @@
-import java.io.ByteArrayOutputStream
-
 plugins {
     alias(libs.plugins.android.application)
 }
 
-/** Runs a git command and returns trimmed stdout, or "" if git/the repo isn't available. */
-fun runGit(vararg args: String): String {
-    val out = ByteArrayOutputStream()
-    return try {
-        project.exec {
-            commandLine(listOf("git") + args)
-            standardOutput = out
-            isIgnoreExitValue = true
-        }
-        out.toString(Charsets.UTF_8.name()).trim()
-    } catch (_: Exception) {
-        ""
-    }
-}
-
-// versionCode = total commit count: monotonically increasing as long as history
-// is linear-ish, which is all this solo/small-team repo needs.
-val gitCommitCount = runGit("rev-list", "--count", "HEAD").toIntOrNull() ?: 1
-// versionName = nearest tag (e.g. "v1.2.0", or "v1.2.0-4-gabc1234" for commits
-// past the last tag). Falls back to "0.0.0-dev" so a fresh clone with no tags
-// (or a shallow CI checkout) still builds instead of crashing Gradle.
-val gitDescribe = runGit("describe", "--tags", "--always", "--dirty").ifBlank { "0.0.0-dev" }
+// Keep version metadata independent of a local Git executable. GitHub Actions
+// supplies GITHUB_RUN_NUMBER for monotonically increasing CI builds, while a
+// local build uses the checked-in fallback values below.
+val ciBuildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+    ?.takeIf { it > 0 }
+    ?: 1
+val releaseVersion = System.getenv("LUMALIGHT_VERSION")?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?: "1.0.1"
 
 android {
     namespace = "com.azlan.lumalight"
@@ -35,8 +20,8 @@ android {
         applicationId = "com.azlan.lumalight"
         minSdk = 23
         targetSdk = 34
-        versionName = gitDescribe
-        versionCode = gitCommitCount
+        versionCode = ciBuildNumber
+        versionName = releaseVersion
     }
 
     signingConfigs {
@@ -57,7 +42,10 @@ android {
         }
         release {
             isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             if (!System.getenv("KEYSTORE_PATH").isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("release")
             }
