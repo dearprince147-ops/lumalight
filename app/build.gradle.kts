@@ -1,4 +1,5 @@
 import java.io.ByteArrayOutputStream
+import org.gradle.kotlin.dsl.exec
 
 plugins {
     alias(libs.plugins.android.application)
